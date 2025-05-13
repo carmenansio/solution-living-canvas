@@ -1,3 +1,4 @@
+syncRepo.sh
 experiments/*
 server/generated/*
 
