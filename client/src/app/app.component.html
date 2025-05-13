@@ -1,0 +1,312 @@
+<div id="app">
+  <div id="game-levels">
+    <span class="section-header">Game levels</span>
+    <div class="level-options">
+      <div class="sandbox-option">
+        <input
+          type="radio"
+          id="sandbox"
+          name="level"
+          value="StageClean"
+          (click)="loadScene('StageClean')"
+          [checked]="currentScene === 'StageClean'"
+        />
+        <label for="sandbox">{{ getLevelNumber("StageClean") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle1"
+          name="level"
+          value="IOPuzzle_Fire"
+          (click)="loadScene('IOPuzzle_Fire')"
+          [checked]="currentScene === 'IOPuzzle_Fire'"
+        />
+        <label for="puzzle1">{{ getLevelNumber("IOPuzzle_Fire") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle2"
+          name="level"
+          value="IOPuzzle_Windy"
+          (click)="loadScene('IOPuzzle_Windy')"
+          [checked]="currentScene === 'IOPuzzle_Windy'"
+        />
+        <label for="puzzle2">{{ getLevelNumber("IOPuzzle_Windy") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle3"
+          name="level"
+          value="IOPuzzle_Ice"
+          (click)="loadScene('IOPuzzle_Ice')"
+          [checked]="currentScene === 'IOPuzzle_Ice'"
+        />
+        <label for="puzzle3">{{ getLevelNumber("IOPuzzle_Ice") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle4"
+          name="level"
+          value="IOPuzzle_Metal"
+          (click)="loadScene('IOPuzzle_Metal')"
+          [checked]="currentScene === 'IOPuzzle_Metal'"
+        />
+        <label for="puzzle4">{{ getLevelNumber("IOPuzzle_Metal") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle5"
+          name="level"
+          value="IOPuzzle_Rain"
+          (click)="loadScene('IOPuzzle_Rain')"
+          [checked]="currentScene === 'IOPuzzle_Rain'"
+        />
+        <label for="puzzle5">{{ getLevelNumber("IOPuzzle_Rain") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle6"
+          name="level"
+          value="IOPuzzle_Earth"
+          (click)="loadScene('IOPuzzle_Earth')"
+          [checked]="currentScene === 'IOPuzzle_Earth'"
+        />
+        <label for="puzzle6">{{ getLevelNumber("IOPuzzle_Earth") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle7"
+          name="level"
+          value="IOPuzzle_Lightning"
+          (click)="loadScene('IOPuzzle_Lightning')"
+          [checked]="currentScene === 'IOPuzzle_Lightning'"
+        />
+        <label for="puzzle7">{{ getLevelNumber("IOPuzzle_Lightning") }}</label>
+      </div>
+      <div class="puzzle-option">
+        <input
+          type="radio"
+          id="puzzle8"
+          name="level"
+          value="IOPuzzle_Balance"
+          (click)="loadScene('IOPuzzle_Balance')"
+          [checked]="currentScene === 'IOPuzzle_Balance'"
+        />
+        <label for="puzzle8">{{ getLevelNumber("IOPuzzle_Balance") }}</label>
+      </div>
+    </div>
+    <div class="help-buttons">
+      <button class="help-button" (click)="openGameHelp()">Game help</button>
+      <button class="help-button" (click)="openAboutDemo()">
+        About this demo
+      </button>
+    </div>
+  </div>
+
+  <div id="main-content">
+    <div id="game-container"></div>
+  </div>
+
+  <app-popup
+    *ngIf="showLevelIntro"
+    [levelState]="levelState"
+    (fadeOutComplete)="showLevelIntro = false"
+  >
+  </app-popup>
+
+  <app-popup
+    *ngIf="showLevelComplete"
+    [levelState]="levelState"
+    (fadeOutComplete)="showLevelComplete = false"
+  >
+  </app-popup>
+
+  <app-popup
+    *ngIf="showGameOver"
+    [levelState]="levelState"
+    (fadeOutComplete)="showGameOver = false"
+  >
+  </app-popup>
+
+  <app-popup
+    *ngIf="showGameWon"
+    [levelState]="levelState"
+    (fadeOutComplete)="showGameWon = false"
+  >
+  </app-popup>
+
+  <div id="game-settings">
+    <div class="settings-group">
+      <label class="group-label">Image backend</label>
+      <div class="options-container">
+        <div>
+          <input
+            type="radio"
+            id="gemini"
+            name="imageGenerator"
+            value="gemini"
+            (click)="setConfig('imageGenerator', 'gemini')"
+            [checked]="gameSettings.imageGenerator === 'gemini'"
+          />
+          <label for="gemini" class="option-label">Gemini 2.0 Flash</label>
+        </div>
+        <div>
+          <input
+            type="radio"
+            id="imagen"
+            name="imageGenerator"
+            value="imagen"
+            (click)="setConfig('imageGenerator', 'imagen')"
+            [checked]="gameSettings.imageGenerator === 'imagen'"
+          />
+          <label for="imagen" class="option-label">Imagen 3</label>
+        </div>
+        <div>
+          <input
+            type="radio"
+            id="veo"
+            name="imageGenerator"
+            value="veo"
+            (click)="setConfig('imageGenerator', 'veo')"
+            [checked]="gameSettings.imageGenerator === 'veo'"
+          />
+          <label for="veo" class="option-label">Veo</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label class="group-label">Art style</label>
+      <div class="options-container">
+        <div>
+          <input
+            type="radio"
+            id="realistic"
+            name="visualStyle"
+            value="realistic"
+            (click)="setConfig('visualStyle', 'realistic')"
+            [checked]="gameSettings.visualStyle === 'realistic'"
+          />
+          <label for="realistic" class="option-label">Realistic</label>
+        </div>
+        <div>
+          <input
+            type="radio"
+            id="cartoon"
+            name="visualStyle"
+            value="cartoon"
+            (click)="setConfig('visualStyle', 'cartoon')"
+            [checked]="gameSettings.visualStyle === 'cartoon'"
+          />
+          <label for="cartoon" class="option-label">Cartoon</label>
+        </div>
+        <div>
+          <input
+            type="radio"
+            id="pixellated"
+            name="visualStyle"
+            value="pixellated"
+            (click)="setConfig('visualStyle', 'pixellated')"
+            [checked]="gameSettings.visualStyle === 'pixellated'"
+          />
+          <label for="pixellated" class="option-label">Pixellated</label>
+        </div>
+        <div>
+          <input
+            type="radio"
+            id="mask"
+            name="visualStyle"
+            value="mask"
+            (click)="setConfig('visualStyle', 'mask')"
+            [checked]="gameSettings.visualStyle === 'mask'"
+          />
+          <label for="mask" class="option-label">Mask</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <div class="group-label">Cast spell</div>
+      <div class="options-container">
+        <button class="command-button" (click)="openCommandDialog()">
+          Enter command
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <app-dialog
+    [title]="'Cast spell'"
+    [isVisible]="showCommandDialog"
+    [focusElementId]="'text-command'"
+    (closeDialog)="closeCommandDialog()"
+  >
+    <div class="command-input-container">
+      <textarea
+        id="text-command"
+        placeholder="Enter a command..."
+        [(ngModel)]="commandText"
+        (keydown.enter)="handleCommandSubmitted(commandText)"
+        (keydown.meta.enter)="handleCommandSubmitted(commandText)"
+      >
+      </textarea>
+      <button
+        [disabled]="!commandText?.trim()"
+        (click)="handleCommandSubmitted(commandText)"
+      >
+        Cast spell
+      </button>
+    </div>
+  </app-dialog>
+
+  <app-dialog
+    [title]="'How to play'"
+    [isVisible]="showGameHelp"
+    (closeDialog)="closeGameHelp()"
+  >
+    <ol>
+      <li>Select a puzzle from the navigation above</li>
+      <li>Choose your preferred image generation backend and art style</li>
+      <li>Click anywhere to open a canvas and start drawing</li>
+      <li>
+        Whatever you draw will come to life – draw fire, a cloud, a tree...
+      </li>
+      <li>Solve each puzzle by bringing the key to the lock</li>
+    </ol>
+  </app-dialog>
+
+  <app-dialog
+    [title]="'About Living Canvas'"
+    [isVisible]="showAboutDemo"
+    (closeDialog)="closeAboutDemo()"
+  >
+    <ul>
+      <li>
+        Interactive image generation using Vertex AI, Gemini, Imagen, and Veo
+      </li>
+      <li>Angular for the UI</li>
+      <li>Support for multiple art styles and model backends</li>
+      <li>
+        Gemini image analysis for determining what gameplay properties to attach
+      </li>
+      <li>Text to game function translation via Gemini</li>
+      <li>
+        <a
+          target="_blank"
+          href="https://developers.google.com/solutions/learn/living-canvas"
+          >Learn more about this Solution</a
+        >
+      </li>
+    </ul>
+  </app-dialog>
+</div>
+<script type="module" src="/src/main.ts"></script>
+
+<router-outlet />
