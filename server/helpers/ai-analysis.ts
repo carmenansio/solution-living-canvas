@@ -21,7 +21,6 @@ import {
 } from "@google-cloud/vertexai";
 import { getGoogleCloudConfig } from "../config";
 import { config as aiConfig } from "./ai-config-helper";
-import { get } from "http";
 
 const { projectId, location } = getGoogleCloudConfig();
 
@@ -40,13 +39,16 @@ interface Schema {
   properties: {
     [key: string]: {
       type: string;
+      description?: string;
       properties?: {
         [key: string]: {
           type: string;
+          description?: string;
         };
       };
     };
   };
+  required?: string[];
 }
 
 // Initialize Vertex AI
@@ -327,9 +329,16 @@ async function sendMultimodalRequest(
         schema = {
           type: "OBJECT",
           properties: {
-            verb: { type: "STRING" },
-            target: { type: "STRING" },
+            verb: { 
+              type: "STRING",
+              description: "The action to perform. Must be one of: setFire, destroy, douse, magnetize, electrify"
+            },
+            target: { 
+              type: "STRING",
+              description: "The object to perform the action on. Must be one of the provided target values"
+            }
           },
+          required: ["verb", "target"]
         };
         break;
     }
@@ -339,6 +348,9 @@ async function sendMultimodalRequest(
       model: model,
       generationConfig: {
         responseMimeType: "application/json",
+        temperature: 0.1,
+        topP: 0.1,
+        topK: 1,
       },
       safetySettings: [
         {
@@ -410,20 +422,23 @@ export async function textToCommand(
     let targetList = "";
 
     for (let i = 0; i < aiConfig.verbs.length; i++) {
-      verbList += ` '${aiConfig.verbs[i].key}'`;
+      verbList += `"${aiConfig.verbs[i].key}"`;
       if (i < aiConfig.verbs.length - 1) {
         verbList += ",";
       }
     }
 
-    for (let i = 0; i < aiConfig.attributes.length; i++) {
-      targetList += ` '${aiConfig.attributes[i].key}'`;
-      if (i < aiConfig.attributes.length - 1) {
-        targetList += ",";
+
+    if (currentTargets && Array.isArray(currentTargets)) {
+      for (let i = 0; i < currentTargets.length; i++) {
+        targetList += `"${currentTargets[i]}"`;
+        if (i < currentTargets.length - 1) {
+          targetList += ",";
+        }
       }
     }
 
-    targetList += ",LAST_OBJECT,LAST_CREATED";
+    targetList += ',"LAST_OBJECT","LAST_CREATED","ALL"';
 
     const commandText = await sendMultimodalRequest(
       aiConfig.buildPrompt("analysis_textToCommand", {
@@ -438,58 +453,47 @@ export async function textToCommand(
     if (!commandText) {
       throw new Error("No response received from AI model");
     }
+    
+    const cleanedText = commandText ? commandText.trim().replace(/```json\n?|\n?```/g, '').trim() : '';
 
     let command;
     try {
-      command = JSON.parse(commandText);
+      command = JSON.parse(cleanedText);
     } catch (error: any) {
       throw new Error(`Failed to parse command response: ${error.message}`);
     }
 
-    const finalCommand: CommandResult = {
-      verb: "",
-      target: "",
+    if (!command || typeof command !== 'object') {
+      throw new Error("Invalid command format: response is not an object");
+    }
+
+    const missingFields = [];
+    if (!('verb' in command)) missingFields.push('verb');
+    if (!('target' in command)) missingFields.push('target');
+    
+    if (missingFields.length > 0) {
+      throw new Error(`Invalid command format: missing required fields: ${missingFields.join(', ')}`);
+    }
+
+    if (typeof command.verb !== 'string' || typeof command.target !== 'string') {
+      throw new Error("Invalid command format: verb and target must be strings");
+    }
+
+    const validVerbs = aiConfig.verbs.map(v => v.key);
+    const validTargets = [...(currentTargets || []), 'LAST_OBJECT', 'LAST_CREATED', 'ALL'];
+    
+    if (!validVerbs.includes(command.verb)) {
+      throw new Error(`Invalid verb: ${command.verb}. Must be one of: ${validVerbs.join(', ')}`);
+    }
+    
+    if (!validTargets.includes(command.target)) {
+      throw new Error(`Invalid target: ${command.target}. Must be one of: ${validTargets.join(', ')}`);
+    }
+
+    return {
+      verb: command.verb.toLowerCase(),
+      target: command.target.toLowerCase()
     };
-
-    if ("verb" in command) {
-      finalCommand.verb = command.verb;
-    }
-
-    if ("target" in command) {
-      finalCommand.target = command.target;
-    }
-
-    if (!("verb" in command && "target" in command)) {
-      const keys = Object.keys(command);
-      if (keys.length === 1) {
-        finalCommand.verb = keys[0];
-        finalCommand.target = command[keys[0]];
-      }
-    }
-
-    // Handle object-type verb and target
-    if (typeof finalCommand.verb === "object" && finalCommand.verb !== null) {
-      const keys = Object.keys(finalCommand.verb);
-      if (keys.length === 1) {
-        finalCommand.verb = keys[0];
-        finalCommand.target = (
-          finalCommand.verb as unknown as Record<string, string>
-        )[keys[0]];
-      }
-    } else if (
-      typeof finalCommand.target === "object" &&
-      finalCommand.target !== null
-    ) {
-      const keys = Object.keys(finalCommand.target);
-      if (keys.length === 1) {
-        finalCommand.verb = keys[0];
-        finalCommand.target = (
-          finalCommand.target as unknown as Record<string, string>
-        )[keys[0]];
-      }
-    }
-
-    return finalCommand;
   } catch (error: any) {
     console.error("Error in textToCommand:", error);
     throw error;

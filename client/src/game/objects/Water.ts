@@ -238,6 +238,7 @@ export class Water extends Phaser.GameObjects.Sprite {
 
     for (let i = 0; i < this.floatingObjects.length; i++) {
       const target = this.floatingObjects[i].gameObject;
+      if (target == null) continue;
       const idx = this.columns.findIndex(
         (col, idx) => col.x >= target.x && idx
       );

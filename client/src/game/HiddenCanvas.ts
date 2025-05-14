@@ -16,6 +16,8 @@
  */
 
 export class HiddenCanvas {
+  MARGIN = 25;
+  CANVAS_SIZE = 250;
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D | null;
   boundingBox: Phaser.Geom.Rectangle;
@@ -129,13 +131,10 @@ export class HiddenCanvas {
 
   // [START get_base64_data]
   getBase64Data() {
-    const MARGIN = 25;
-    const CANVAS_SIZE = 250;
-
     let tempCanvas = document.createElement('canvas');
 
-    tempCanvas.width = CANVAS_SIZE / 2;
-    tempCanvas.height = CANVAS_SIZE / 2;
+    tempCanvas.width = this.CANVAS_SIZE / 2;
+    tempCanvas.height = this.CANVAS_SIZE / 2;
 
     let tempCtx = tempCanvas.getContext('2d');
 
@@ -146,20 +145,18 @@ export class HiddenCanvas {
 
       tempCtx.drawImage(
         this.canvas,
-        -MARGIN,
-        -MARGIN,
-        CANVAS_SIZE,
-        CANVAS_SIZE,
+        -this.MARGIN,
+        -this.MARGIN,
+        this.CANVAS_SIZE,
+        this.CANVAS_SIZE,
         0,
         0,
-        CANVAS_SIZE / 2,
-        CANVAS_SIZE / 2
+        this.CANVAS_SIZE / 2,
+        this.CANVAS_SIZE / 2
       );
     }
 
-    const b64 = tempCanvas.toDataURL();
-
-    return b64;
+    return tempCanvas.toDataURL();
   }
   // [END get_base64_data]
 }

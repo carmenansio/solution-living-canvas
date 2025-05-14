@@ -46,6 +46,7 @@ interface WorldObjProp {
 
   floatOffset: number;
   generating: boolean;
+  user_generated_obj: boolean;
 }
 
 const WorldObjPropDefaults: WorldObjProp = {
@@ -75,6 +76,7 @@ const WorldObjPropDefaults: WorldObjProp = {
   heal: false,
   floatOffset: 0,
   generating: false,
+  user_generated_obj: false,
 };
 
 const WorldObjPropZeros: WorldObjPRop = {
@@ -104,6 +106,7 @@ const WorldObjPropZeros: WorldObjPRop = {
   heal: false,
   floatOffset: 0,
   generating: false,
+  user_generated_obj: false,
 };
 
 export class WorldObject extends Phaser.GameObjects.Sprite {
@@ -160,8 +163,6 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
 
     // Add to scene and Matter before anything else
     scene.add.existing(this);
-
-    this.debug = false;
 
     if (animationKey && frameKeys && frameKeys.length > 0) {
       this.isAnimated = true;
@@ -628,7 +629,7 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
   preUpdate(time, delta) {
     super.preUpdate(time, delta);
     this.frameCounter = (this.frameCounter + 1) % 240;
-    if (this.debug) {
+    if (this.debug && this.debugGraphic) {
       this.debugGraphic.setText(this.getDebugInfo());
       this.debugGraphic.setPosition(
         this.x + this.displayWidth / 2 + 4,
@@ -638,11 +639,10 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
     if (
       !this.prop ||
       this.prop.generating ||
-      !this.prop.solid ||
       !this.scene.textures.exists(this.name)
-    )
+    ) {
       return;
-    if (!this.scene.textures.exists(this.name)) return;
+    }
 
     if (this.prop.walks) {
       this.setVelocityX?.(0.5);
@@ -934,7 +934,7 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
         this instanceof IceKey ||
         this instanceof RustedKey
       ) {
-        this.gameOver();
+        this.gameOver('key_destroyed');
       }
     }
   }
@@ -980,7 +980,7 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
       y: -10,
     });
     this.explosion.explode(400, this.x, this.y);
-    this.body.gameObject.setMass(0.0001);
+    this.body?.gameObject?.setMass(0.0001);
     this.life = -200;
     this.bExploded = true;
 
@@ -989,7 +989,7 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
       this instanceof IceKey ||
       this instanceof RustedKey
     ) {
-      this.gameOver();
+      this.gameOver('key_destroyed');
     }
   }
 
@@ -1173,7 +1173,8 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
   }
 
   gameOver(reason) {
-    this.scene.game.app.showGameOverMessage(reason);
+    // @ts-ignore
+    window.phaserGame.app.showGameOverMessage(reason);
   }
 }
 
@@ -1185,8 +1186,7 @@ export class Boat extends WorldObject {
       drives: false,
       wooden: true,
     });
-    this.prop.floatOffset = -this.height * 0.75;
-    this.setScale(1.75);
+    this.prop.floatOffset = -this.height * 0.4;
   }
 }
 

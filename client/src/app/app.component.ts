@@ -390,12 +390,18 @@ export class AppComponent implements AfterViewInit {
 
     this.clearAllPopups();
 
+    let hint = 'Restarting level...';
+    if (reason === 'key_destroyed') {
+      hint = 'You destroyed the key! Restarting level...';
+    }
+
     this.levelState = {
       type: 'gameOver',
       name: 'Game Over',
-      hint: 'You destroyed the key! Restarting level...',
+      hint: hint,
     };
     this.showGameOver = true;
+
     if (this.phaserGame) {
       const currentScenes = this.phaserGame.scene.getScenes(true);
       currentScenes.forEach((scene) => {
@@ -403,10 +409,14 @@ export class AppComponent implements AfterViewInit {
           scene.scene.stop();
         }
       });
-    }
 
-    if (this.phaserGame) {
-      this.phaserGame.scene.start(this.currentScene);
+      setTimeout(() => {
+        const currentScene = this.phaserGame.scene.getScene(this.currentScene);
+        if (currentScene && currentScene instanceof LivingCanvasStage) {
+          currentScene.updateConfigState(this.gameSettings);
+        }
+        this.phaserGame.scene.start(this.currentScene);
+      }, 500);
     }
   }
 
@@ -444,6 +454,10 @@ export class AppComponent implements AfterViewInit {
   }
 
   handleCommandSubmitted(command: string) {
+    setTimeout(() => {
+      this.commandText = '';
+    }, 0);
+    
     const sceneForTargets: any =
       this.getPhaserSceneForFunction('getCurrentTargets');
     const currentTargets = sceneForTargets.getCurrentTargets();
@@ -473,7 +487,6 @@ export class AppComponent implements AfterViewInit {
         console.error('Error:', error);
       });
 
-    this.commandText = '';
     this.closeCommandDialog();
   }
 }

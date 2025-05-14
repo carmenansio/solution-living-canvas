@@ -75,6 +75,9 @@ app.get("/test", (_req: Request, res: Response) => {
 
 app.use(express.static("public/browser"));
 
+
+app.use("/solution", express.static("public/solution"));
+
 app.get("/resources/:file", async (req: Request, res: Response) => {
   try {
     const filePath = join(__dirname, "resources/", req.params.file);

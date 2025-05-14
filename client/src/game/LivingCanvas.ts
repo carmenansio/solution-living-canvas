@@ -16,7 +16,12 @@
  */
 
 import { Scene, Math } from 'phaser';
-import { IceCube, IceWall, WorldObject } from './objects/WorldObject';
+import {
+  IceCube,
+  IceWall,
+  RustedKey,
+  WorldObject,
+} from './objects/WorldObject';
 import { WorldObjectFactory } from './objects/WorldObjectFactory';
 import { Water } from './objects/Water';
 import { HiddenCanvas } from './HiddenCanvas';
@@ -95,8 +100,6 @@ export class LivingCanvasStage extends Scene {
   debugEnabled: boolean = false;
 
   fireConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig;
-
-  lastCreatedList: any[] = [];
 
   worldConfig = {
     name: 'Unknown',
@@ -289,7 +292,6 @@ export class LivingCanvasStage extends Scene {
     // alert("verb: " + commandJson.verb + " target: " + commandJson.target);
 
     var targets = [];
-    console.log(this.lastCreatedList);
 
     switch (commandJson.target) {
       case '':
@@ -300,24 +302,25 @@ export class LivingCanvasStage extends Scene {
         break;
       case 'last_created':
       case 'last_object':
-        targets.push(this.getWorldObjectList().at(-1));
-        //targets.push(this.lastCreatedList[this.lastCreatedList.length - 1]);
+        var last = this.getLastCreatedObject();
+        if (last) {
+          targets.push(this.getLastCreatedObject());
+        }
         break;
       default:
+        // find target by name
+        targets = this.getWorldObjectList().filter(
+          (obj) =>
+            commandJson.target &&
+            obj.name.toLowerCase() === commandJson.target.toLowerCase()
+        );
+
+        // additional target with the property
         var filter = new Object();
         filter[commandJson.target] = true;
-        targets = this.getWorldObjectList(filter);
-        /*this.getWorldObjectList().forEach((object) => {
-					console.log('considering target:', object);
-
-					if (object.name.toUpperCase().indexOf(commandJson.target) >= 0) {
-						targets.push(object);
-					}
-
-					if (object.prop[commandJson.target.toLowerCase()] == true) {
-						targets.push(object);
-					}
-				})*/
+        this.getWorldObjectList(filter).forEach((target) => {
+          targets.push(target);
+        });
         break;
     }
 
@@ -327,6 +330,7 @@ export class LivingCanvasStage extends Scene {
       // case 'CREATE':
       case 'destroy':
         targets.forEach((target) => {
+          target.clearEffects();
           target.addFire(true);
           target.prop.explodes = true;
           target.life = 0;
@@ -335,6 +339,7 @@ export class LivingCanvasStage extends Scene {
         break;
       case 'setfire':
         targets.forEach((target) => {
+          target.clearEffects();
           target.addFire(true);
           target.prop.explodes = true;
           // set random life
@@ -352,6 +357,16 @@ export class LivingCanvasStage extends Scene {
           target.prop.magnetic = true;
           target.createMagneticForce();
           target.updateMagneticField();
+        });
+        break;
+      case 'electrify':
+        targets.forEach((target) => {
+          if (target.prop?.rusted) {
+            target.prop.rusted = false;
+            if (target instanceof RustedKey) {
+              target.setTexture('key');
+            }
+          }
         });
         break;
     }
@@ -450,6 +465,16 @@ export class LivingCanvasStage extends Scene {
       }
     });
     return list;
+  }
+
+  getLastCreatedObject(): WorldObject {
+    var last = null;
+    this.children.list.forEach((object) => {
+      if (object instanceof WorldObject && object.prop.user_generated_obj) {
+        last = object;
+      }
+    });
+    return last;
   }
 
   setFireToEverything() {
@@ -961,30 +986,46 @@ export class LivingCanvasStage extends Scene {
     }
   }
 
+  cleanUpCanvasStrokes() {
+    for (let i = 0; i < this.canvasObjects.length; i++) {
+      this.canvasObjects[i].destroy();
+    }
+  }
+
+  logImageGenerationEvent(imageData: string) {
+    switch (this.gameSettings.imageGenerator) {
+      case 'gemini':
+        this.logGeminiGenerationResponse('data:image/png;base64,' + imageData);
+        break;
+      case 'imagen':
+        this.logImagenGenerationResponse('data:image/png;base64,' + imageData);
+        break;
+      case 'veo':
+        this.logVeoGenerationResponse('data:image/png;base64,' + imageData);
+        break;
+    }
+  }
+
   // [START process_canvas]
   async processCanvas() {
     let coords = {
       x: this.lastPointerX,
       y: this.lastPointerY,
     };
-    console.log('Processing canvas to server, coords:', coords);
 
     let base64ImageData = this.hiddenCanvas.extractCanvas();
     this.logBrowserToAppHosting(base64ImageData);
+    this.cleanUpCanvasStrokes();
 
-    for (let i = 0; i < this.canvasObjects.length; i++) {
-      this.canvasObjects[i].destroy();
-    }
-
-    var userProp = WorldObject.getDefaultWorldObjProp();
-    userProp.solid = false;
-    userProp.generating = true;
+    var initialProperties = WorldObject.getDefaultWorldObjProp();
+    initialProperties.solid = false;
+    initialProperties.generating = true;
 
     let phaserObj = await this.add.userobject(
       coords.x,
       coords.y,
       base64ImageData,
-      userProp
+      initialProperties
     );
 
     const loadingParticles = this.createLoadingParticles(coords.x, coords.y);
@@ -997,24 +1038,29 @@ export class LivingCanvasStage extends Scene {
       );
       console.log('Gemini analysis response:', geminiResponse);
 
-      let finalProps = WorldObject.getDefaultWorldObjProp();
+      let finalProperties = WorldObject.getDefaultWorldObjProp();
 
       console.log(
         "Gemini core 'type' guess:",
         geminiResponse.type.toLowerCase()
       );
 
-      let additionalProps =
+      let additionalProperties =
         this.extractPropertiesFromGeminiData(geminiResponse);
-      console.log(additionalProps);
-      finalProps = { ...finalProps, ...additionalProps };
+
+      console.log('Additional Properties', additionalProperties);
+
+      // Merge properties
+      finalProperties = { ...finalProperties, ...additionalProperties };
+      finalProperties.user_generated_obj = true;
 
       this.logGeminiAnalysisResponse(
         geminiResponse.type,
-        JSON.stringify(finalProps, null, 2)
+        JSON.stringify(finalProperties, null, 2)
       );
 
-      const imagenData = await this.sendToImageGenerationBackend(
+      // Start generating higher fidelity image
+      const generatedImageData = await this.sendToImageGenerationBackend(
         geminiResponse.type,
         base64ImageData
       );
@@ -1023,9 +1069,12 @@ export class LivingCanvasStage extends Scene {
       loadingParticles.stop();
       loadingParticles.destroy();
 
+      // ...
+      // [END process_canvas]
+
       if (this.gameSettings.imageGenerator === 'veo') {
         // Handle Veo animation
-        const hash = imagenData;
+        const hash = generatedImageData;
         const staticImageUrl = this.constructServerUrl(
           `generated/output_${hash}.png`
         );
@@ -1033,7 +1082,7 @@ export class LivingCanvasStage extends Scene {
         // Load the static image first
         this.load.image(hash, staticImageUrl);
         this.load.once('complete', () => {
-          phaserObj.updateObject(hash, additionalProps);
+          phaserObj.updateObject(hash, additionalProperties);
         });
         this.load.start();
 
@@ -1065,37 +1114,21 @@ export class LivingCanvasStage extends Scene {
         }
       } else {
         // Handle Imagen/Gemini static image
-        switch (this.gameSettings.imageGenerator) {
-          case 'gemini':
-            this.logGeminiGenerationResponse(
-              'data:image/png;base64,' + imagenData
-            );
-            break;
-          case 'imagen':
-            this.logImagenGenerationResponse(
-              'data:image/png;base64,' + imagenData
-            );
-            break;
-          case 'veo':
-            this.logVeoGenerationResponse(
-              'data:image/png;base64,' + imagenData
-            );
-            break;
-        }
+        this.logImageGenerationEvent(generatedImageData);
 
-        const imageKey = md5(imagenData);
+        const imageKey = md5(generatedImageData);
 
         this.targetsHistory.push(geminiResponse.type);
-        for (const key in finalProps) {
-          if (finalProps[key] == true) {
+        for (const key in finalProperties) {
+          if (finalProperties[key] == true) {
             this.targetsHistory.push(key);
           }
         }
 
         if (this.textures.exists(imageKey)) {
-          phaserObj.updateObject(imageKey, finalProps);
+          phaserObj.updateObject(imageKey, finalProperties);
         } else {
-          phaserObj.updateObject(undefined, finalProps);
+          phaserObj.updateObject(undefined, finalProperties);
 
           this.textures.on('onload', (textureId: string, texture) => {
             console.log(
@@ -1107,19 +1140,17 @@ export class LivingCanvasStage extends Scene {
 
             if (textureId == imageKey) {
               console.log('imagen texture id == imagekey');
-              phaserObj.updateObject(textureId, finalProps);
+              phaserObj.updateObject(textureId, finalProperties);
             }
           });
 
           this.textures.addBase64(
             imageKey,
-            'data:image/png;base64,' + imagenData
+            'data:image/png;base64,' + generatedImageData
           );
           console.log('added imagen texture to list');
         }
       }
-
-      this.lastCreatedList.push(phaserObj);
     } catch (error) {
       console.error('Error in processCanvas:', error);
       // Ensure loading particles are cleaned up on error
@@ -1157,19 +1188,6 @@ export class LivingCanvasStage extends Scene {
       // Reset drawing state
       this.drawingInProgress = false;
       this.mouseDown = false;
-    }
-  }
-  // [END process_canvas]
-
-  destroyLastCreated() {
-    if (this.lastCreatedList.length > 0) {
-      const lastCreated = this.lastCreatedList.pop();
-      if (lastCreated && lastCreated.destroy) {
-        // lastCreated.destroy();
-        lastCreated.addFire(true);
-        lastCreated.prop.explodes = true;
-        lastCreated.life = 0;
-      }
     }
   }
 
