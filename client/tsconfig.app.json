@@ -5,8 +5,7 @@
   "compilerOptions": {
     "outDir": "./out-tsc/app",
   "lib": ["es6", "dom", "dom.iterable", "scripthost"],
-    "typeRoots": ["./node_modules/phaser/types"],
-    "types": ["Phaser"]
+    "typeRoots": ["./node_modules/phaser/types"]
   },
   "files": [
     "src/main.ts"

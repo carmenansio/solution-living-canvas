@@ -27,3 +27,6 @@ dist-ssr
 *.sln
 *.sw?
 /server/resources
+
+# Angular clients
+client/.angular
