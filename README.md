@@ -56,6 +56,15 @@ npm install
 npm run dev
 ```
 
+## Running in Firebase Studio
+
+1. Open the project in Firebase Studio.
+1. When prompted, log in with your account.
+1. Add your Google Cloud Project details (project ID, region and API key) to the file `.idx/dev.nix`.
+    * Follow the steps under [Prerequisites](#prerequisites) to set up your Google Cloud project.
+1. Rebuild the environment when prompted.
+1. The app is now ready! Switch to the **Web Preview** to see it in action.
+
 <!-- 
 ### Getting started in Firebase Studio
 

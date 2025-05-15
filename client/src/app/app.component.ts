@@ -58,6 +58,7 @@ import { DialogComponent } from './dialog/dialog.component';
 import { PopupComponent } from './popup/popup.component';
 import { FormsModule } from '@angular/forms';
 import { LivingCanvasStage } from '../game/LivingCanvas';
+import { environment } from '../environments/environment';
 
 //  Find out more information about the Game Config at:
 //  https://newdocs.phaser.io/docs/3.70.0/Phaser.Types.Core.GameConfig
@@ -494,8 +495,8 @@ export class AppComponent implements AfterViewInit {
 function constructServerUrl(path) {
   if (window.location.hostname === 'localhost') {
     return `http://localhost:3000/${path}`;
-  } else {
-    // Assuming the server is hosted on the same domain
-    return `${window.location.origin}/${path}`;
+  } else{
+    // Get the URL from the environment configuration.
+    return `${environment.backendUrl}/${path}`;
   }
 }

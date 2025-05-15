@@ -27,6 +27,8 @@ import { Water } from './objects/Water';
 import { HiddenCanvas } from './HiddenCanvas';
 import { md5 } from 'js-md5';
 
+import { environment } from '../environments/environment';
+
 import { example_texture } from './example_texture';
 import { raw } from 'body-parser';
 
@@ -180,8 +182,8 @@ export class LivingCanvasStage extends Scene {
       // private network
       return `http://${window.location.hostname}:3000/${path}`;
     } else {
-      // Assuming the server is hosted on the same domain
-      return `${window.location.origin}/${path}`;
+      // Get the URL from the environment configuration.
+      return `${environment.backendUrl}/${path}`;
     }
   }
 
