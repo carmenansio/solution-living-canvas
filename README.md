@@ -34,6 +34,7 @@ We recommend trying out this project in Firebase Studio. Click this button to la
    - *We recommended using a new Firebase project for this demo. This [simplifies cleanup](#delete-and-clean-up-deployed-services) to avoid incurring on-going costs after trying out this demo app.*
 1. [Activate billing on your Google Cloud / Firebase Project](https://console.cloud.google.com/billing/linkedaccount?project=_)
 1. [Enable Vertex AI and recommended APIs](https://console.cloud.google.com/vertex-ai) in the Google Cloud console.
+1. [Get a Gemini API key for your project in Google AI Studio.](https://aistudio.google.com/app/apikey)
 
 > [!NOTE]
 > Enabling billing and deploying services may incur a cost. Follow the steps under [Delete and clean up deployed services](#delete-and-clean-up-deployed-services) to remove any deployed services after trying out this demo.
