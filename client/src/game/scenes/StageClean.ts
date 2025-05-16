@@ -25,7 +25,6 @@ export class StageClean extends LivingCanvasStage {
 	preload() {
 		const visualStyle = this.gameSettings?.visualStyle || 'realistic';
 		this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_sandbox.png`;
-		this.load.image('fallback_bg_StageClean', 'assets/clean.jpg');
 		this.load.image('sandbox', 'assets/puzzle_masks/sandbox.png');
 		super.preload();
 	}

@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-import {
-  VertexAI,
-  HarmCategory,
-  HarmBlockThreshold,
-} from "@google-cloud/vertexai";
+import { SafetySetting, VertexAI } from "@google-cloud/vertexai";
 import { getGoogleCloudConfig } from "../config";
 import { config as aiConfig } from "./ai-config-helper";
 
@@ -27,6 +23,7 @@ const { projectId, location } = getGoogleCloudConfig();
 interface AnalysisResult {
   type: string;
   attributes?: string[];
+  shouldRemove?: boolean;
 }
 
 interface CommandResult {
@@ -106,6 +103,10 @@ export async function imageToConfig(
       "imageToConfig"
     );
 
+    if (result === "__BLOCKED__") {
+      return aiConfig.getSafetySettingsResponse();
+    }
+
     if (!result) {
       throw new Error("No response received from AI model");
     }
@@ -117,6 +118,11 @@ export async function imageToConfig(
       finalResult = JSON.parse(result) as AnalysisResult;
     } catch (error: any) {
       throw new Error(`Failed to parse AI response: ${error.message}`);
+    }
+
+    // Check for inappropriate content early
+    if (aiConfig.isInappropriateContent(finalResult.type)) {
+      return aiConfig.getSafetySettingsResponse();
     }
 
     console.debug("Gemini Analysis - Initial Guess:", finalResult);
@@ -145,6 +151,10 @@ export async function imageToConfig(
         "imageToConfig"
       );
 
+      if (genericGuessText === "__BLOCKED__") {
+        return aiConfig.getSafetySettingsResponse();
+      }
+
       if (!genericGuessText) {
         throw new Error("No response received for generic analysis");
       }
@@ -159,11 +169,10 @@ export async function imageToConfig(
         );
       }
 
-      console.log(
-        "Gemini Analysis - Generic guess:",
-        typeof genericGuess,
-        genericGuess
-      );
+      // Check for inappropriate content in generic guess
+      if (aiConfig.isInappropriateContent(genericGuess.type)) {
+        return aiConfig.getSafetySettingsResponse();
+      }
 
       const attributes = getAttributes();
 
@@ -179,6 +188,14 @@ export async function imageToConfig(
         "attributesList"
       );
 
+      // ...
+      // [END image_to_config]
+
+      // Check for inappropriate content in attributes guess
+      if (attributesGuessText === "__BLOCKED__") {
+        return aiConfig.getSafetySettingsResponse();
+      }
+
       if (!attributesGuessText) {
         throw new Error("No response received for attributes analysis");
       }
@@ -191,9 +208,6 @@ export async function imageToConfig(
           `Failed to parse attributes analysis response: ${error.message}`
         );
       }
-
-      // ...
-      // [END image_to_config]
 
       console.log(
         "Gemini Analysis - Attributes:",
@@ -329,21 +343,22 @@ async function sendMultimodalRequest(
         schema = {
           type: "OBJECT",
           properties: {
-            verb: { 
+            verb: {
               type: "STRING",
-              description: "The action to perform. Must be one of: setFire, destroy, douse, magnetize, electrify"
+              description:
+                "The action to perform. Must be one of: setFire, destroy, douse, magnetize, electrify",
             },
-            target: { 
+            target: {
               type: "STRING",
-              description: "The object to perform the action on. Must be one of the provided target values"
-            }
+              description:
+                "The object to perform the action on. Must be one of the provided target values",
+            },
           },
-          required: ["verb", "target"]
+          required: ["verb", "target"],
         };
         break;
     }
 
-    // @ts-ignore TODO: Verify this is correct
     const generativeVisionModel = vertexAI.getGenerativeModel({
       model: model,
       generationConfig: {
@@ -352,24 +367,7 @@ async function sendMultimodalRequest(
         topP: 0.1,
         topK: 1,
       },
-      safetySettings: [
-        {
-          category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-        {
-          category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-          threshold: HarmBlockThreshold.BLOCK_NONE,
-        },
-      ],
+      safetySettings: aiConfig.getSafetySettings() as SafetySetting[],
     });
 
     if (schema !== null) {
@@ -393,6 +391,19 @@ async function sendMultimodalRequest(
       request
     );
     const contentResponse = await streamingResult.response;
+    console.log(
+      "Content response finish reason:",
+      contentResponse?.candidates?.[0]
+    );
+
+    // Check if the response is blocked by the safety settings
+    if (contentResponse?.candidates?.[0]?.finishReason === "SAFETY") {
+      return "__BLOCKED__";
+    }
+    console.log(
+      "Content response candidates:",
+      contentResponse?.candidates?.[0]?.content?.parts?.[0]?.text
+    );
 
     if (!contentResponse?.candidates?.[0]?.content?.parts?.[0]?.text) {
       throw new Error("Invalid response format from AI model");
@@ -412,34 +423,60 @@ async function sendMultimodalRequest(
   }
 }
 
+function getVerbs() {
+  let verbList = "";
+  for (let i = 0; i < aiConfig.verbs.length; i++) {
+    verbList += `"${aiConfig.verbs[i].key}"`;
+    if (i < aiConfig.verbs.length - 1) {
+      verbList += ",";
+    }
+  }
+  return verbList;
+}
+
+function getTargetList(currentTargets: string[]) {
+  let targetList = "";
+
+  if (currentTargets && Array.isArray(currentTargets)) {
+    for (let i = 0; i < currentTargets.length; i++) {
+      targetList += `"${currentTargets[i]}"`;
+      if (i < currentTargets.length - 1) {
+        targetList += ",";
+      }
+    }
+  }
+
+  targetList += ',"LAST_OBJECT","LAST_CREATED","ALL"';
+
+  return targetList;
+}
+
 // [START text_to_command]
 export async function textToCommand(
   textCommand: string | null,
   currentTargets: any
 ): Promise<CommandResult> {
   try {
-    let verbList = "";
-    let targetList = "";
+    let verbList = getVerbs();
+    let targetList = getTargetList(currentTargets);
 
-    for (let i = 0; i < aiConfig.verbs.length; i++) {
-      verbList += `"${aiConfig.verbs[i].key}"`;
-      if (i < aiConfig.verbs.length - 1) {
-        verbList += ",";
-      }
-    }
-
-
-    if (currentTargets && Array.isArray(currentTargets)) {
-      for (let i = 0; i < currentTargets.length; i++) {
-        targetList += `"${currentTargets[i]}"`;
-        if (i < currentTargets.length - 1) {
-          targetList += ",";
-        }
-      }
-    }
-
-    targetList += ',"LAST_OBJECT","LAST_CREATED","ALL"';
-
+    // "analysis_textToCommand": You are a JSON parser.
+    // Your task is to extract a verb and target from the
+    // given text and return them in a specific JSON format.
+    // The response MUST be a valid JSON object with EXACTLY
+    // TWO fields: 'verb' and 'target'. BOTH fields are REQUIRED.
+    // The verb MUST be one of these exact values: {{verbs}}
+    // The target MUST be one of these exact values: {{targets}}
+    // IMPORTANT: The target MUST be an object that can be acted
+    // upon (like 'key', 'metal', etc.) and NOT an attribute or
+    // property. For example, if the text is 'set the key on fire',
+    // you MUST return exactly this JSON: { \"verb\": \"setFire\",
+    // \"target\": \"key\" } Do not include any other text,
+    // markdown, or formatting - just the JSON object.
+    // The response MUST be parseable by JSON.parse() and MUST
+    // contain BOTH verb and target fields. The target field MUST
+    // be present and MUST be one of the provided target values.
+    // Here is the text to analyze: {{text}}
     const commandText = await sendMultimodalRequest(
       aiConfig.buildPrompt("analysis_textToCommand", {
         text: textCommand ?? "",
@@ -450,11 +487,19 @@ export async function textToCommand(
       "textToCommand"
     );
 
+    // ...
+    // [END text_to_command]
+
     if (!commandText) {
       throw new Error("No response received from AI model");
     }
-    
-    const cleanedText = commandText ? commandText.trim().replace(/```json\n?|\n?```/g, '').trim() : '';
+
+    const cleanedText = commandText
+      ? commandText
+          .trim()
+          .replace(/```json\n?|\n?```/g, "")
+          .trim()
+      : "";
 
     let command;
     try {
@@ -463,40 +508,61 @@ export async function textToCommand(
       throw new Error(`Failed to parse command response: ${error.message}`);
     }
 
-    if (!command || typeof command !== 'object') {
+    if (!command || typeof command !== "object") {
       throw new Error("Invalid command format: response is not an object");
     }
 
     const missingFields = [];
-    if (!('verb' in command)) missingFields.push('verb');
-    if (!('target' in command)) missingFields.push('target');
-    
+    if (!("verb" in command)) missingFields.push("verb");
+    if (!("target" in command)) missingFields.push("target");
+
     if (missingFields.length > 0) {
-      throw new Error(`Invalid command format: missing required fields: ${missingFields.join(', ')}`);
+      throw new Error(
+        `Invalid command format: missing required fields: ${missingFields.join(
+          ", "
+        )}`
+      );
     }
 
-    if (typeof command.verb !== 'string' || typeof command.target !== 'string') {
-      throw new Error("Invalid command format: verb and target must be strings");
+    if (
+      typeof command.verb !== "string" ||
+      typeof command.target !== "string"
+    ) {
+      throw new Error(
+        "Invalid command format: verb and target must be strings"
+      );
     }
 
-    const validVerbs = aiConfig.verbs.map(v => v.key);
-    const validTargets = [...(currentTargets || []), 'LAST_OBJECT', 'LAST_CREATED', 'ALL'];
-    
+    const validVerbs = aiConfig.verbs.map((v) => v.key);
+    const validTargets = [
+      ...(currentTargets || []),
+      "LAST_OBJECT",
+      "LAST_CREATED",
+      "ALL",
+    ];
+
     if (!validVerbs.includes(command.verb)) {
-      throw new Error(`Invalid verb: ${command.verb}. Must be one of: ${validVerbs.join(', ')}`);
+      throw new Error(
+        `Invalid verb: ${command.verb}. Must be one of: ${validVerbs.join(
+          ", "
+        )}`
+      );
     }
-    
+
     if (!validTargets.includes(command.target)) {
-      throw new Error(`Invalid target: ${command.target}. Must be one of: ${validTargets.join(', ')}`);
+      throw new Error(
+        `Invalid target: ${command.target}. Must be one of: ${validTargets.join(
+          ", "
+        )}`
+      );
     }
 
     return {
       verb: command.verb.toLowerCase(),
-      target: command.target.toLowerCase()
+      target: command.target.toLowerCase(),
     };
   } catch (error: any) {
     console.error("Error in textToCommand:", error);
     throw error;
   }
 }
-// [END text_to_command]

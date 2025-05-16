@@ -21,6 +21,7 @@ import cors from "cors";
 import { md5 } from "js-md5";
 import fs from "fs";
 import { getServerConfig } from "./config";
+import { cacheManager } from "./helpers/cache-manager";
 import {
   applyRoundedCornersAndBorder,
   resizeImage,
@@ -32,6 +33,7 @@ import {
   generateVideoAndFrames,
 } from "./helpers/veo-generation";
 import { generateImageWithImagen } from "./helpers/imagen-generation";
+import { config } from "./helpers/ai-config-helper";
 
 const { port } = getServerConfig();
 const app = express();
@@ -75,8 +77,10 @@ app.get("/test", (_req: Request, res: Response) => {
 
 app.use(express.static("public/browser"));
 
-
-app.use("/solution", express.static("public/solution"));
+app.use("/solution", express.static("solution"));
+app.use("/external-assets", express.static("solution/external-assets"));
+app.use("/src", express.static("solution/src"));
+app.use("/shared-assets", express.static("solution/shared-assets"));
 
 app.get("/resources/:file", async (req: Request, res: Response) => {
   try {
@@ -112,7 +116,14 @@ app.post("/analyseImage", async (req: Request, res: Response) => {
     }
 
     const response = await imageToConfig(trimmedData);
+    
     console.log("response", response);
+
+    // Check for inappropriate content in the response if safety settings are not triggered
+    if (response.type && config.isInappropriateContent(response.type)) {
+      return res.json(config.getSafetySettingsResponse());
+    }
+
     res.send(response);
   } catch (error) {
     console.log("Error in analyseImage", error);
@@ -185,6 +196,11 @@ app.post("/generateImage", async (req: Request, res: Response) => {
       return;
     }
 
+		// Check for inappropriate content in the prompt
+    if (config.isInappropriateContent(prompt)) {
+      return res.json(config.getSafetySettingsResponse());
+    }
+
     const objectType = prompt;
     const visualStylePrompt = style || "realistic";
     const hash = md5(objectType + visualStylePrompt + Date.now());
@@ -211,7 +227,7 @@ app.post("/generateImage", async (req: Request, res: Response) => {
     } catch (cleanupError) {
       console.error("Error cleaning up existing files:", cleanupError);
     }
-
+    
     if (backend === "veo") {
       try {
         const filenameOriginal = `output_${hash}_original.png`;
@@ -327,8 +343,9 @@ app.post("/textToCommand", async (req: Request, res: Response) => {
 // Apply error handling middleware last
 app.use(errorHandler);
 
+// Start the server
 app.listen(port, () => {
-  console.log(
-    `Application started and Listening on port ${port}. http://localhost:${port}/`
-  );
+	console.log(
+		`Application started and Listening on port ${port}. http://localhost:${port}/`
+	);
 });

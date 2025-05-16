@@ -58,7 +58,8 @@ import { DialogComponent } from './dialog/dialog.component';
 import { PopupComponent } from './popup/popup.component';
 import { FormsModule } from '@angular/forms';
 import { LivingCanvasStage } from '../game/LivingCanvas';
-import { environment } from '../environments/environment';
+
+import { environment } from './../environments/environment';
 
 //  Find out more information about the Game Config at:
 //  https://newdocs.phaser.io/docs/3.70.0/Phaser.Types.Core.GameConfig
@@ -228,8 +229,6 @@ export class AppComponent implements AfterViewInit {
   }
 
   loadScene(sceneKey: string, skipIntro = false) {
-    console.log('Loading scene:', sceneKey);
-
     this.clearAllPopups();
 
     const levelNumber = this.getLevelNumber(sceneKey);
@@ -276,7 +275,6 @@ export class AppComponent implements AfterViewInit {
 
     if (this.phaserGame) {
       const currentScenes = this.phaserGame.scene.getScenes(true);
-      console.log('Current active scenes:', currentScenes);
 
       currentScenes.forEach((scene) => {
         if (scene.scene.key !== 'Boot' && scene.scene.key !== 'Preloader') {
@@ -458,7 +456,7 @@ export class AppComponent implements AfterViewInit {
     setTimeout(() => {
       this.commandText = '';
     }, 0);
-    
+
     const sceneForTargets: any =
       this.getPhaserSceneForFunction('getCurrentTargets');
     const currentTargets = sceneForTargets.getCurrentTargets();
@@ -495,7 +493,7 @@ export class AppComponent implements AfterViewInit {
 function constructServerUrl(path) {
   if (window.location.hostname === 'localhost') {
     return `http://localhost:3000/${path}`;
-  } else{
+  } else {
     // Get the URL from the environment configuration.
     return `${environment.backendUrl}/${path}`;
   }

@@ -29,13 +29,22 @@
     "gemini_background_puzzle8": "Generate a {{visualStyle}} 2D game background of a space station. Use the provided black mask as a guide with clear separation for the foreground of a dark space station structures and white for background of the space station.",
 
     "analysis_textToCommand": "You are a JSON parser. Your task is to extract a verb and target from the given text and return them in a specific JSON format. The response MUST be a valid JSON object with EXACTLY TWO fields: 'verb' and 'target'. BOTH fields are REQUIRED. The verb MUST be one of these exact values: {{verbs}} The target MUST be one of these exact values: {{targets}} IMPORTANT: The target MUST be an object that can be acted upon (like 'key', 'metal', etc.) and NOT an attribute or property. For example, if the text is 'set the key on fire', you MUST return exactly this JSON: { \"verb\": \"setFire\", \"target\": \"key\" } Do not include any other text, markdown, or formatting - just the JSON object. The response MUST be parseable by JSON.parse() and MUST contain BOTH verb and target fields. The target field MUST be present and MUST be one of the provided target values.\nHere is the text to analyze: {{text}}",
-    "analysis_textToCommand_old": "Given this text, what is the command that should be run? You MUST identify two things from the sentence text. What is the VERB? and what is the TARGET? You have a fixed list of verbs to choose from and a fixed list of targets. Here are the verbs: {{verbs}} and here are the targets: {{targets}} The text is: {{text}}",
+    
     "veo_generation": "Show the subject gently moving or floating in place, always fully visible and centered, with no zoom, no cropping, and no added borders. The background should remain clean and consistent. The animation should be subtle and natural, preserving the original composition of the image."
+  },
+  "cache": {
+    "enabled": true,
+    "poolSize": 4,
+    "cacheDir": "generated/cache"
   },
   "visualStyles": [
     {
       "id": "pixellated",
       "prompt": "8-bit retro pixel video game art. Sprites should be very low resolution. As if they are 16 pixels by 16 pixels but resized."
+    },
+    {
+      "id": "comic",
+      "prompt": "cartoon and comic book like. Thick black outlines. Only use 6 colours maximum: black, white, blue, red, green, yellow."
     },
     {
       "id": "realistic",
@@ -45,6 +54,53 @@
       "id": "cartoon",
       "prompt": "cartoon, like a comic book. Poppy art style. Strong solid colours."
     }
+  ],
+  "safetySettings": {
+    "categories": [
+      {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "BLOCK_LOW_AND_ABOVE"
+      },
+      {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "BLOCK_LOW_AND_ABOVE"
+      },
+      {
+        "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "threshold": "BLOCK_LOW_AND_ABOVE"
+      },
+      {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "BLOCK_LOW_AND_ABOVE"
+      }
+    ]
+  },
+  "safetySettingsResponse": {
+    "type": "inappropriate",
+    "attributes": [],
+    "shouldRemove": true
+  },
+  "inappropriateKeywords": [
+    "inappropriate",
+    "blocked",
+    "obscene",
+    "penis",
+    "offensive",
+    "nude",
+    "naked",
+    "explicit",
+    "sexual",
+    "violence",
+    "gore",
+    "hate",
+    "discriminatory",
+    "gun",
+    "weapon",
+    "bomb",
+    "explosion",
+    "explosive",
+    "explosive device",
+    "dynamite"
   ],
   "pregenerated": [
     {

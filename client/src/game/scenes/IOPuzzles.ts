@@ -27,7 +27,13 @@ export class IOPuzzle_Fire extends LivingCanvasStage {
     const visualStyle = this.gameSettings?.visualStyle || 'realistic';
 
     this.load.image('fallback_bg_IOPuzzle_Fire', 'assets/io_puzzle_fire.jpg');
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_fire.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle1.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_fire.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
 
     super.preload();
@@ -154,7 +160,13 @@ export class IOPuzzle_Windy extends LivingCanvasStage {
   preload() {
     const visualStyle = this.gameSettings?.visualStyle || 'realistic';
     this.load.image('fallback_bg_IOPuzzle_Windy', 'assets/io_puzzle_windy.jpg');
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_windy.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle2.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_windy.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
 
     super.preload();
@@ -227,7 +239,13 @@ export class IOPuzzle_Ice extends LivingCanvasStage {
   preload() {
     const visualStyle = this.gameSettings?.visualStyle || 'realistic';
     this.load.image('fallback_bg_IOPuzzle_Ice', 'assets/io_puzzle_ice.jpg');
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_ice.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle3.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_ice.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
 
     super.preload();
@@ -330,7 +348,13 @@ export class IOPuzzle_Metal extends LivingCanvasStage {
   preload() {
     const visualStyle = this.gameSettings?.visualStyle || 'realistic';
     this.load.image('fallback_bg_IOPuzzle_Metal', 'assets/io_puzzle_metal.jpg');
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_metal.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle4.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_metal.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
 
     super.preload();
@@ -414,7 +438,13 @@ export class IOPuzzle_Rain extends LivingCanvasStage {
   preload() {
     const visualStyle = this.gameSettings?.visualStyle || 'realistic';
     this.load.image('fallback_bg_IOPuzzle_Rain', 'assets/io_puzzle_rain.jpg');
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_rain.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle5.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_rain.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
 
     super.preload();
@@ -494,9 +524,14 @@ export class IOPuzzle_Earth extends LivingCanvasStage {
   preload() {
     const visualStyle = this.gameSettings?.visualStyle || 'realistic';
     this.load.image('fallback_bg_IOPuzzle_Earth', 'assets/io_puzzle_earth.jpg');
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_earth.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle6.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_earth.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
-
     super.preload();
   }
 
@@ -594,7 +629,13 @@ export class IOPuzzle_Lightning extends LivingCanvasStage {
       'fallback_bg_IOPuzzle_Lightning',
       'assets/io_puzzle_lightning.jpg'
     );
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_lightning.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle7.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_lightning.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
 
     super.preload();
@@ -683,9 +724,14 @@ export class IOPuzzle_Balance extends LivingCanvasStage {
       'fallback_bg_IOPuzzle_Balance',
       'assets/io_puzzle_balance.jpg'
     );
-    this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_balance.png`;
+    
+    if (visualStyle === 'mask') {
+      this.worldConfig.bgImage = 'assets/puzzle_masks/puzzle8.png';
+    } else {
+      this.worldConfig.bgImage = `assets/generated/${visualStyle}/io_puzzle_balance.png`;
+    }
+    
     this.load.image('goal', 'assets/goal.png');
-
     super.preload();
   }
 

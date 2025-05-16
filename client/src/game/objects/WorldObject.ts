@@ -122,6 +122,8 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
   explosion: Phaser.GameObjects.Particles.ParticleEmitter;
   drips: Phaser.GameObjects.Particles.ParticleEmitter;
   steam: Phaser.GameObjects.Particles.ParticleEmitter;
+  windEffectLeft: Phaser.GameObjects.Particles.ParticleEmitter;
+  windEffectRight: Phaser.GameObjects.Particles.ParticleEmitter;
   magneticField: Phaser.GameObjects.Particles.ParticleEmitter;
 
   gameObject: Phaser.GameObjects.Sprite;
@@ -160,6 +162,10 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
     const property = { ...WorldObjPropDefaults, ...prop };
     super(scene, x, y, texture);
     this.debug = false;
+    if (typeof texture != 'undefined') {
+      // set pre-defined object name
+      this.setName(texture);
+    }
 
     // Add to scene and Matter before anything else
     scene.add.existing(this);
@@ -204,7 +210,7 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
 
     if (typeof texture != 'undefined') {
       this.setTexture(texture);
-      this.setName(texture);
+      this.textureName = texture;
     }
 
     this.life = 100;
@@ -340,12 +346,6 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
         particleConfig.gravityY = 600;
         break;
       case 'cartoon':
-        const graphics = this.scene.add.graphics();
-        graphics.fillStyle(0xffffff);
-        graphics.fillCircle(16, 16, 16);
-        graphics.generateTexture('droplet_circle', 32, 32);
-        graphics.destroy();
-
         particleTexture = 'droplet_circle';
         particleConfig.scale = { min: 0.2, max: 0.2 };
         particleConfig.alpha = { start: 0.8, end: 0.4 };
@@ -377,7 +377,7 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
       { isSensor: true, isStatic: true }
     );
     this.rain_zone = rain_zone;
-    this.scene.matter.world.on('collisionactive', function (event) {
+    this.rain_zone_collision = function (event) {
       for (const pair of event.pairs) {
         const { bodyA, bodyB } = pair;
         if (bodyA == rain_zone) {
@@ -387,7 +387,8 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
           bodyA.gameObject?.addWet();
         }
       }
-    });
+    };
+    this.scene.matter.world.on('collisionactive', this.rain_zone_collision);
   }
 
   createMagneticForce() {
@@ -639,7 +640,7 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
     if (
       !this.prop ||
       this.prop.generating ||
-      !this.scene.textures.exists(this.name)
+      !this.scene.textures.exists(this.textureName)
     ) {
       return;
     }
@@ -677,9 +678,13 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
       }
     }
 
-    if (this.windEffectLeft && this.windEffectRight) {
-      this.windEffectLeft.setAngle(this.angle);
-      this.windEffectRight.setAngle(this.angle);
+    try {
+      if (this.windEffectLeft && this.windEffectRight) {
+        this.windEffectLeft.setAngle(this.angle);
+        this.windEffectRight.setAngle(this.angle);
+      }
+    } catch (e) {
+      console.warn('Error updating wind effect:', e);
     }
 
     if (this.prop.lightning) {
@@ -729,6 +734,8 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
       this.explosion,
       this.drips,
       this.steam,
+      this.windEffectLeft,
+      this.windEffectRight,
       this.magneticField,
     ];
     emitters.forEach((emitter, idx) => {
@@ -754,10 +761,25 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
           this.steam = null;
           break;
         case 4:
+          this.windEffectLeft = null;
+          break;
+        case 5:
+          this.windEffectRight = null;
+          break;
+        case 6:
           this.magneticField = null;
           break;
       }
     });
+
+    if (this.rain_zone) {
+      this.scene.matter.world.remove(this.rain_zone);
+      this.rain_zone = null;
+    }
+    if (this.rain_zone_collision) {
+      this.scene.matter.world.off('collisionactive', this.rain_zone_collision);
+      this.rain_zone_collision = null;
+    }
 
     // Safely handle tween
     if (this.tween) {
@@ -783,6 +805,12 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
     }
     if (this.steam && !this.steam.removed) {
       this.steam.stop();
+    }
+    if (this.windEffectLeft && !this.windEffectLeft.removed) {
+      this.windEffectLeft.stop();
+    }
+    if (this.windEffectRight && !this.windEffectRight.removed) {
+      this.windEffectRight.stop();
     }
     if (this.magneticField && !this.magneticField.removed) {
       this.magneticField.stop();
@@ -867,12 +895,16 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
     this.safeRemoveParticleEmitter(this.explosion);
     this.safeRemoveParticleEmitter(this.drips);
     this.safeRemoveParticleEmitter(this.steam);
+    this.safeRemoveParticleEmitter(this.windEffectLeft);
+    this.safeRemoveParticleEmitter(this.windEffectRight);
     this.safeRemoveParticleEmitter(this.magneticField);
 
     this.fireEmitter = null;
     this.explosion = null;
     this.drips = null;
     this.steam = null;
+    this.windEffectLeft = null;
+    this.windEffectRight = null;
     this.magneticField = null;
   }
 
@@ -1139,6 +1171,18 @@ export class WorldObject extends Phaser.GameObjects.Sprite {
           try {
             obj.steam.stop();
             obj.steam.remove();
+          } catch {}
+        }
+        if (obj.windEffectLeft && !obj.windEffectLeft.removed) {
+          try {
+            obj.windEffectLeft.stop();
+            obj.windEffectLeft.remove();
+          } catch {}
+        }
+        if (obj.windEffectRight && !obj.windEffectRight.removed) {
+          try {
+            obj.windEffectRight.stop();
+            obj.windEffectRight.remove();
           } catch {}
         }
         if (obj.magneticField && !obj.magneticField.removed) {

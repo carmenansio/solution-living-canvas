@@ -147,8 +147,6 @@ export class LivingCanvasStage extends Scene {
   ];
   tempCanvasVisible: boolean = false;
 
-  targetsHistory: string[] = [];
-
   constructor(config: string | Phaser.Types.Scenes.SettingsConfig) {
     super(config);
     this.fireConfig = {
@@ -194,9 +192,31 @@ export class LivingCanvasStage extends Scene {
   updateAssets() {
     if (this.worldConfig.bgImage) {
       const visualStyle = this.gameSettings?.visualStyle || 'realistic';
-      const bgPath = this.worldConfig.bgImage.split('/');
-      bgPath[bgPath.length - 2] = visualStyle;
-      const newBgPath = bgPath.join('/');
+
+      if (visualStyle === 'mask') {
+        this.updateBackground();
+        this.updateAllObjectsVisualStyle();
+        return;
+      }
+
+      const currentPath = this.worldConfig.bgImage;
+      const filename = currentPath.split('/').pop();
+
+      const sceneToFilename = {
+        IOPuzzle_Fire: 'io_puzzle_fire.png',
+        IOPuzzle_Windy: 'io_puzzle_windy.png',
+        IOPuzzle_Ice: 'io_puzzle_ice.png',
+        IOPuzzle_Metal: 'io_puzzle_metal.png',
+        IOPuzzle_Rain: 'io_puzzle_rain.png',
+        IOPuzzle_Earth: 'io_puzzle_earth.png',
+        IOPuzzle_Lightning: 'io_puzzle_lightning.png',
+        IOPuzzle_Balance: 'io_puzzle_balance.png',
+        StageClean: 'io_sandbox.png',
+      };
+
+      const correctFilename = sceneToFilename[this.scene.key] || filename;
+
+      const newBgPath = `assets/generated/${visualStyle}/${correctFilename}`;
 
       if (newBgPath !== this.worldConfig.bgImage) {
         this.worldConfig.bgImage = newBgPath;
@@ -206,13 +226,11 @@ export class LivingCanvasStage extends Scene {
 
         this.load.once('complete', () => {
           this.updateBackground();
-
           this.updateAllObjectsVisualStyle();
         });
         this.load.start();
       } else {
         this.updateBackground();
-
         this.updateAllObjectsVisualStyle();
       }
     }
@@ -374,38 +392,44 @@ export class LivingCanvasStage extends Scene {
     }
   }
 
+  addTargetKeys(targets: string[], key: string) {
+    const ignoreKey = ['', 'generating', 'user_generated_obj'];
+    if (ignoreKey.includes(key) || targets.includes(key)) return;
+    targets.push(key);
+  }
+
   getCurrentTargets() {
     const worldObjects = this.getWorldObjectList();
+    const ignoreKey = ['', 'generating', 'user_generated_obj'];
     var targets = [];
 
     console.log('getCurrentTargets', JSON.stringify(worldObjects, null, 2));
 
     for (let i = 0; i < worldObjects.length; i++) {
       const obj = worldObjects[i];
-
-      if (!targets.includes(obj.name)) {
-        targets.push(obj.name);
-      }
-
+      this.addTargetKeys(targets, obj.name);
       for (const key in obj.prop) {
         if (obj.prop[key] == true) {
-          if (!targets.includes(key)) {
-            targets.push(key);
-          }
+          this.addTargetKeys(targets, key);
         }
       }
     }
 
-    targets = targets.concat(this.targetsHistory);
-
     console.log('getCurrentTargets', targets);
-
     return targets;
   }
 
   preload() {
     this.worldConfig.size.width = this.game.config.width;
     this.worldConfig.size.height = this.game.config.height;
+
+    if (!this.textures.exists('droplet_circle')) {
+      const graphics = this.add.graphics();
+      graphics.fillStyle(0xffffff);
+      graphics.fillCircle(16, 16, 16);
+      graphics.generateTexture('droplet_circle', 32, 32);
+      graphics.destroy();
+    }
 
     // Load mask images
     for (let i = 1; i <= 8; i++) {
@@ -415,21 +439,8 @@ export class LivingCanvasStage extends Scene {
 
     if (this.worldConfig.bgImage) {
       const visualStyle = this.gameSettings?.visualStyle || 'realistic';
-      const bgPath = this.worldConfig.bgImage.split('/');
-      bgPath[bgPath.length - 2] = visualStyle;
-      this.worldConfig.bgImage = bgPath.join('/');
-
       const bgKey = `bgImage_${this.scene.key}_${visualStyle}`;
       this.load.image(bgKey, this.worldConfig.bgImage);
-
-      const fallbackKey = `fallback_bg_${this.scene.key}`;
-      if (!this.textures.exists(fallbackKey)) {
-        const fallbackPath = this.worldConfig.bgImage.replace(
-          `/${visualStyle}/`,
-          '/fallback/'
-        );
-        this.load.image(fallbackKey, fallbackPath);
-      }
     }
 
     WorldObjectFactory.preload(this);
@@ -600,6 +611,13 @@ export class LivingCanvasStage extends Scene {
           this.worldConfig.size.height,
           0x000000
         );
+        loadingParticles.stop();
+        loadingParticles.destroy();
+        if (phaserObj) {
+          phaserObj.destroy();
+        }
+        this.drawingInProgress = false;
+        this.mouseDown = false;
       }
     } else {
       this.background = this.add.rectangle(
@@ -668,38 +686,6 @@ export class LivingCanvasStage extends Scene {
       userProp.explodes = true;
       this.add.userobject(pos.x, pos.y, example_texture, userProp);
     }
-  }
-
-  async createNewUserObject(
-    base64ImageData: any,
-    x: number,
-    y: number,
-    props: any
-  ) {
-    return new Promise((resolve, reject) => {
-      console.log('b64', base64ImageData);
-
-      const imageKey = md5(base64ImageData);
-
-      this.textures.on('onload', (textureId) => {
-        if (textureId == imageKey) {
-          const item = this.add.dynamicobject(
-            textureId,
-            base64ImageData,
-            x,
-            y,
-            props
-          );
-
-          item.width = 200;
-          item.height = 200;
-
-          resolve(item);
-        }
-      });
-
-      this.textures.addBase64(imageKey, base64ImageData);
-    });
   }
 
   update() {
@@ -895,11 +881,11 @@ export class LivingCanvasStage extends Scene {
     var config = WorldObject.getZeroWorldObjProp();
 
     if (rawData == undefined) {
-      return config;
+      return WorldObject.getDefaultWorldObjProp();
     }
 
     for (const key in config) {
-      console.log('Considering key', key);
+      //console.log('Considering key', key);
 
       if (rawData.attributes.indexOf(key) != -1) {
         console.log('Setting ' + key + ' to true');
@@ -941,10 +927,14 @@ export class LivingCanvasStage extends Scene {
   }
   // [END send_image_data]
 
-  async sendToImageGenerationBackend(prompt: string, imageData: string) {
+  async sendToImageGenerationBackend(
+    prompt: string,
+    imageData: string,
+    generatorType: string
+  ) {
     const url = this.constructServerUrl('generateImage');
 
-    console.log('Sending to backend:', this.gameSettings.imageGenerator);
+    console.log('Sending to backend:', generatorType);
 
     try {
       const response = await fetch(url, {
@@ -955,7 +945,7 @@ export class LivingCanvasStage extends Scene {
         body: JSON.stringify({
           prompt: prompt,
           imageData: imageData,
-          backend: this.gameSettings.imageGenerator,
+          backend: generatorType,
           style: this.gameSettings.visualStyle,
         }),
       });
@@ -966,7 +956,7 @@ export class LivingCanvasStage extends Scene {
       }
 
       // Handle different response types based on backend
-      if (this.gameSettings.imageGenerator === 'veo') {
+      if (generatorType === 'veo') {
         // For Veo, we expect a JSON response with a hash
         const result = await response.json();
         if (result.error) {
@@ -1010,6 +1000,7 @@ export class LivingCanvasStage extends Scene {
 
   // [START process_canvas]
   async processCanvas() {
+    const generatorType = this.gameSettings.imageGenerator;
     let coords = {
       x: this.lastPointerX,
       y: this.lastPointerY,
@@ -1039,13 +1030,30 @@ export class LivingCanvasStage extends Scene {
         base64ImageData
       );
       console.log('Gemini analysis response:', geminiResponse);
-
       let finalProperties = WorldObject.getDefaultWorldObjProp();
+
+      if (!geminiResponse) {
+        throw new Error('No response from server');
+      }
+
+      // Check for inappropriate content response
+      if (geminiResponse.shouldRemove) {
+        // Clean up and remove the drawing
+        loadingParticles.stop();
+        loadingParticles.destroy();
+        if (phaserObj) {
+          phaserObj.destroy();
+        }
+        this.drawingInProgress = false;
+        this.mouseDown = false;
+        return;
+      }
 
       console.log(
         "Gemini core 'type' guess:",
         geminiResponse.type.toLowerCase()
       );
+      phaserObj.setName(geminiResponse.type.toLowerCase().toLowerCase());
 
       let additionalProperties =
         this.extractPropertiesFromGeminiData(geminiResponse);
@@ -1064,8 +1072,18 @@ export class LivingCanvasStage extends Scene {
       // Start generating higher fidelity image
       const generatedImageData = await this.sendToImageGenerationBackend(
         geminiResponse.type,
-        base64ImageData
+        base64ImageData,
+        generatorType
       );
+
+      if (generatedImageData !== null && generatedImageData.shouldRemove) {
+        loadingParticles.stop();
+        loadingParticles.destroy();
+        if (phaserObj) phaserObj.destroy();
+        this.drawingInProgress = false;
+        this.mouseDown = false;
+        return;
+      }
 
       // Stop and destroy loading particles before proceeding
       loadingParticles.stop();
@@ -1074,7 +1092,7 @@ export class LivingCanvasStage extends Scene {
       // ...
       // [END process_canvas]
 
-      if (this.gameSettings.imageGenerator === 'veo') {
+      if (generatorType === 'veo') {
         // Handle Veo animation
         const hash = generatedImageData;
         const staticImageUrl = this.constructServerUrl(
@@ -1120,26 +1138,12 @@ export class LivingCanvasStage extends Scene {
 
         const imageKey = md5(generatedImageData);
 
-        this.targetsHistory.push(geminiResponse.type);
-        for (const key in finalProperties) {
-          if (finalProperties[key] == true) {
-            this.targetsHistory.push(key);
-          }
-        }
-
         if (this.textures.exists(imageKey)) {
           phaserObj.updateObject(imageKey, finalProperties);
         } else {
           phaserObj.updateObject(undefined, finalProperties);
 
           this.textures.on('onload', (textureId: string, texture) => {
-            console.log(
-              'imagen texture on load, imageKey, textureId',
-              imageKey,
-              textureId,
-              texture
-            );
-
             if (textureId == imageKey) {
               console.log('imagen texture id == imagekey');
               phaserObj.updateObject(textureId, finalProperties);
@@ -1183,6 +1187,8 @@ export class LivingCanvasStage extends Scene {
           if (phaserObj.tween) {
             phaserObj.tween.stop();
           }
+          // Destroy the object in all error cases
+          phaserObj.destroy();
         } catch (cleanupError) {
           console.error('Error during object cleanup:', cleanupError);
         }
@@ -1805,7 +1811,9 @@ export class LivingCanvasStage extends Scene {
         } else {
           this.load.image(hash, staticImageUrl);
           this.load.once('complete', () => {
-            phaserObj.updateObject(hash, phaserObj.prop);
+            if (phaserObj && !phaserObj.destroyed) {
+              phaserObj.updateObject(hash, phaserObj.prop);
+            }
           });
           this.load.start();
         }
@@ -1864,110 +1872,319 @@ export class LivingCanvasStage extends Scene {
 
   createAndPlayAnimation(hash: string, frameKeys: string[], phaserObj?: any) {
     const animationKey = `bounceLoop_${hash}`;
-    const validFrames = frameKeys.filter((key) => this.textures.exists(key));
-    if (validFrames.length === 0) {
-      console.error('No valid frames found for animation');
-      // Instead of destroying, just stop blinking and show placeholder
-      if (phaserObj) {
-        if (phaserObj.blinkTween) {
-          phaserObj.blinkTween.stop();
-          phaserObj.setAlpha(1);
-        }
-        const staticImageUrl = this.constructServerUrl(
-          `generated/output_${hash}.png`
+    console.log('Starting createAndPlayAnimation for hash:', hash);
+
+    // First ensure all textures are loaded
+    const loadTextures = async () => {
+      return new Promise((resolve) => {
+        const unloadedFrames = frameKeys.filter(
+          (frame) => !this.textures.exists(frame)
         );
-        if (this.textures.exists(hash)) {
-          phaserObj.updateObject(hash, phaserObj.prop);
-        } else {
-          this.load.image(hash, staticImageUrl);
-          this.load.once('complete', () => {
-            phaserObj.updateObject(hash, phaserObj.prop);
-          });
-          this.load.start();
+        if (unloadedFrames.length === 0) {
+          resolve(true);
+          return;
         }
-      }
-      return;
-    }
 
-    let x = phaserObj.x;
-    let y = phaserObj.y;
-    let prop = { ...phaserObj.prop };
-    let displayWidth = phaserObj.displayWidth;
-    let displayHeight = phaserObj.displayHeight;
+        unloadedFrames.forEach((frame) => {
+          const framePath = this.constructServerUrl(
+            `generated/output_${hash}_frame${frame}.png`
+          );
+          this.load.image(frame, framePath);
+        });
 
-    if (phaserObj) {
-      if (phaserObj.fire && !phaserObj.fire.destroyed) {
-        try {
-          phaserObj.fire.stop();
-          phaserObj.fire.remove();
-        } catch {}
-      }
-      if (phaserObj.flare && !phaserObj.flare.destroyed) {
-        try {
-          phaserObj.flare.stop();
-          phaserObj.flare.remove();
-        } catch {}
-      }
-      if (phaserObj.explosion && !phaserObj.explosion.destroyed) {
-        try {
-          phaserObj.explosion.stop();
-          phaserObj.explosion.remove();
-        } catch {}
-      }
-      if (phaserObj.drips && !phaserObj.drips.destroyed) {
-        try {
-          phaserObj.drips.stop();
-          phaserObj.drips.remove();
-        } catch {}
-      }
-      if (phaserObj.steam && !phaserObj.steam.destroyed) {
-        try {
-          phaserObj.steam.stop();
-          phaserObj.steam.remove();
-        } catch {}
-      }
-      if (phaserObj.tween) {
-        try {
-          phaserObj.tween.stop();
-          phaserObj.tween.remove();
-        } catch {}
-      }
-      if (phaserObj.blinkTween) {
-        try {
-          phaserObj.blinkTween.stop();
-          phaserObj.setAlpha(1);
-        } catch {}
-      }
-      try {
-        phaserObj.destroy(true);
-      } catch {}
-    }
+        this.load.once('complete', () => {
+          resolve(true);
+        });
 
-    // Create the animated object
-    const animObj = new WorldObject(
+        this.load.once('loaderror', () => {
+          resolve(false);
+        });
+
+        this.load.start();
+      });
+    };
+
+    // Store all properties from the original object
+    const originalProps = {
+      x: phaserObj?.x || 0,
+      y: phaserObj?.y || 0,
+      prop: { ...(phaserObj?.prop || {}) },
+      displayWidth: phaserObj?.displayWidth || 200,
+      displayHeight: phaserObj?.displayHeight || 200,
+      depth: phaserObj?.depth || 1000,
+      name: phaserObj?.name || `veoAnim_${hash}`,
+      physics: {
+        frictionAir: phaserObj?.body?.frictionAir,
+        friction: phaserObj?.body?.friction,
+        restitution: phaserObj?.body?.restitution,
+        density: phaserObj?.body?.density,
+        mass: phaserObj?.body?.mass,
+        velocity: phaserObj?.body?.velocity
+          ? { ...phaserObj.body.velocity }
+          : undefined,
+        angularVelocity: phaserObj?.body?.angularVelocity,
+        angle: phaserObj?.body?.angle,
+      },
+      effects: {
+        hasFire: phaserObj?.fire && !phaserObj.fire.destroyed,
+        hasFlare: phaserObj?.flare && !phaserObj.flare.destroyed,
+        hasExplosion: phaserObj?.explosion && !phaserObj.explosion.destroyed,
+        hasDrips: phaserObj?.drips && !phaserObj.drips.destroyed,
+        hasSteam: phaserObj?.steam && !phaserObj.steam.destroyed,
+        hasTween: phaserObj?.tween ? true : false,
+        configs: {
+          fire: phaserObj?.fire?.config
+            ? { ...phaserObj.fire.config }
+            : undefined,
+          flare: phaserObj?.flare?.config
+            ? { ...phaserObj.flare.config }
+            : undefined,
+          explosion: phaserObj?.explosion?.config
+            ? { ...phaserObj.explosion.config }
+            : undefined,
+          drips: phaserObj?.drips?.config
+            ? { ...phaserObj.drips.config }
+            : undefined,
+          steam: phaserObj?.steam?.config
+            ? { ...phaserObj.steam.config }
+            : undefined,
+        },
+      },
+    };
+
+    // Create a temporary placeholder while loading
+    const placeholder = new WorldObject(
       this,
-      x,
-      y,
-      validFrames[0],
-      prop,
-      animationKey,
-      validFrames
+      originalProps.x,
+      originalProps.y,
+      frameKeys[0],
+      originalProps.prop
     );
 
-    animObj.setName(`veoAnim_${hash}`);
-    animObj.setDepth(phaserObj.depth || 1000);
-    animObj.setVisible(true);
-    animObj.setOrigin(0.5, 0.5);
-    animObj.setAlpha(1);
+    // Ensure the placeholder is properly initialized
+    placeholder.setActive(true);
+    placeholder.setVisible(true);
+    placeholder.setName(originalProps.name);
+    placeholder.setDepth(originalProps.depth);
+    placeholder.setOrigin(0.5, 0.5);
+    placeholder.setAlpha(1);
 
-    if (displayWidth && displayHeight) {
-      animObj.setDisplaySize(displayWidth, displayHeight);
+    if (originalProps.displayWidth && originalProps.displayHeight) {
+      placeholder.setDisplaySize(
+        originalProps.displayWidth,
+        originalProps.displayHeight
+      );
     }
 
-    // If the object had special effects, re-add them if needed
-    if (animObj.prop && animObj.prop.burns && !animObj.flare) {
-      animObj.addFire();
+    // Add placeholder to the last created list
+    if (!this.lastCreatedList) {
+      this.lastCreatedList = [];
     }
+    this.lastCreatedList.push(placeholder);
+
+    // Load textures and create animation
+    loadTextures().then((success) => {
+      if (!success) {
+        console.error('Failed to load animation textures');
+        return;
+      }
+
+      // Create animation
+      if (!this.anims.exists(animationKey)) {
+        this.anims.create({
+          key: animationKey,
+          frames: frameKeys.map((frame) => ({ key: frame })),
+          frameRate: 10,
+          repeat: -1,
+        });
+      }
+
+      // Start the animation on the placeholder
+      placeholder.play(animationKey);
+      console.log(
+        'Animation started on placeholder:',
+        animationKey,
+        placeholder
+      );
+
+      // Wait for next frame to ensure body is initialized
+      this.time.delayedCall(0, () => {
+        if (placeholder && placeholder.body) {
+          // Copy physics properties
+          if (originalProps.physics) {
+            try {
+              if (originalProps.physics.frictionAir !== undefined) {
+                placeholder.body.frictionAir =
+                  originalProps.physics.frictionAir;
+              }
+              if (originalProps.physics.friction !== undefined) {
+                placeholder.body.friction = originalProps.physics.friction;
+              }
+              if (originalProps.physics.restitution !== undefined) {
+                placeholder.body.restitution =
+                  originalProps.physics.restitution;
+              }
+              if (originalProps.physics.density !== undefined) {
+                placeholder.body.density = originalProps.physics.density;
+              }
+              if (originalProps.physics.mass !== undefined) {
+                placeholder.body.mass = originalProps.physics.mass;
+              }
+              if (originalProps.physics.velocity) {
+                placeholder.body.velocity.x = originalProps.physics.velocity.x;
+                placeholder.body.velocity.y = originalProps.physics.velocity.y;
+              }
+              if (originalProps.physics.angularVelocity !== undefined) {
+                placeholder.body.angularVelocity =
+                  originalProps.physics.angularVelocity;
+              }
+              if (originalProps.physics.angle !== undefined) {
+                placeholder.setAngle(originalProps.physics.angle);
+              }
+            } catch (e) {
+              console.warn('Error copying physics properties:', e);
+            }
+          }
+
+          // Transfer effects
+          const effectNames = [
+            'fire',
+            'flare',
+            'explosion',
+            'drips',
+            'steam',
+            'wind',
+            'magnet',
+            'tween',
+            'blinkTween',
+          ];
+          effectNames.forEach((effect) => {
+            try {
+              if (
+                originalProps.effects[
+                  `has${effect.charAt(0).toUpperCase() + effect.slice(1)}`
+                ]
+              ) {
+                const config = originalProps.effects.configs[effect];
+                const methodName = `add${
+                  effect.charAt(0).toUpperCase() + effect.slice(1)
+                }`;
+                if (typeof placeholder[methodName] === 'function') {
+                  if (config) {
+                    const newConfig = { ...config };
+                    if (newConfig.followTarget) {
+                      newConfig.followTarget = placeholder;
+                    }
+                    placeholder[methodName](newConfig);
+                  } else {
+                    placeholder[methodName]();
+                  }
+                } else {
+                  // Optionally log or ignore missing method
+                  // console.warn(`No method ${methodName} on placeholder`);
+                }
+              }
+            } catch (e) {
+              console.warn(`Error transferring ${effect} effect:`, e);
+            }
+          });
+
+          // Transfer particle emitters from original to placeholder
+          const emitterProps = [
+            'windEffectLeft',
+            'windEffectRight',
+            'fireEmitter',
+            'drips',
+            'steam',
+            'flare',
+            'explosion',
+          ];
+          emitterProps.forEach((prop) => {
+            if (phaserObj[prop]) {
+              // Re-assign follow target if possible
+              if (typeof phaserObj[prop].startFollow === 'function') {
+                phaserObj[prop].startFollow(placeholder);
+              }
+              // Move emitter reference to placeholder
+              placeholder[prop] = phaserObj[prop];
+              phaserObj[prop] = null;
+            }
+          });
+        }
+
+        // Add a small delay before destroying the original object
+        this.time.delayedCall(50, () => {
+          if (phaserObj && !phaserObj.destroyed) {
+            try {
+              // Stop all effects before destroying
+              const effectNames = [
+                'fire',
+                'flare',
+                'explosion',
+                'drips',
+                'steam',
+                'wind',
+                'magnet',
+                'tween',
+                'blinkTween',
+              ];
+              effectNames.forEach((effect) => {
+                if (phaserObj[effect] && !phaserObj[effect].destroyed) {
+                  try {
+                    // Stop emitting particles
+                    if (phaserObj[effect].stop) {
+                      phaserObj[effect].stop();
+                    }
+                    // Remove from update list
+                    if (
+                      phaserObj[effect].scene &&
+                      phaserObj[effect].scene.sys &&
+                      phaserObj[effect].scene.sys.updateList
+                    ) {
+                      phaserObj[effect].scene.sys.updateList.remove(
+                        phaserObj[effect]
+                      );
+                    }
+                    // Destroy the emitter
+                    if (phaserObj[effect].destroy) {
+                      phaserObj[effect].destroy();
+                    }
+                  } catch (e) {
+                    console.warn(`Error stopping ${effect} effect:`, e);
+                  }
+                }
+              });
+
+              // Clear any remaining effects
+              if (phaserObj.clearEffects) {
+                try {
+                  phaserObj.clearEffects();
+                } catch (e) {
+                  console.warn('Error clearing effects:', e);
+                }
+              }
+
+              // Remove from update list before destroying
+              if (
+                phaserObj.scene &&
+                phaserObj.scene.sys &&
+                phaserObj.scene.sys.updateList
+              ) {
+                phaserObj.scene.sys.updateList.remove(phaserObj);
+              }
+
+              // Finally destroy the object
+              phaserObj.destroy(true);
+              console.log('Original object destroyed after delay');
+            } catch (e) {
+              console.warn('Error destroying original object:', e);
+            }
+          }
+        });
+      });
+    });
+
+    return placeholder;
   }
 
   safeSceneTransition(sceneKey: string, data?: any) {
@@ -2073,10 +2290,6 @@ export class LivingCanvasStage extends Scene {
         obj.updateVisualStyle();
       }
     });
-
-    if (this.water) {
-      this.water.updateVisualStyle();
-    }
   }
 
   createLoadingParticles(x: number, y: number) {

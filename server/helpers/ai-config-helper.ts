@@ -16,6 +16,16 @@
 
 import fs from "fs";
 
+interface SafetyCategory {
+	category: string;
+	threshold: string;
+	description: string;
+}
+
+interface SafetyThresholds {
+	[key: string]: string;
+}
+
 interface AIConfig {
   prompts: {
     [key: string]: string;
@@ -46,6 +56,28 @@ interface AIConfig {
     expression: string,
     valueObj: { [key: string]: string }
   ) => string;
+	safetySettings: {
+		categories: SafetyCategory[];
+		defaultThreshold: string;
+		thresholds: SafetyThresholds;
+	};
+	inappropriateKeywords: string[];
+	safetySettingsResponse: {
+		type: string;
+		attributes: string[];
+		shouldRemove: boolean;
+	};
+  cache: {
+    enabled: boolean;
+    poolSize: number;
+    cacheDir: string;
+  };
+}
+
+interface CacheConfig {
+  enabled: boolean;
+  poolSize: number;
+  cacheDir: string;
 }
 
 const aiConfig: AIConfig = JSON.parse(
@@ -74,11 +106,45 @@ function buildPrompt(
   return "";
 }
 
+function getSafetySettings() {
+	return aiConfig.safetySettings.categories.map((category) => ({
+		category: category.category,
+		threshold: category.threshold,
+	}));
+}
+
+function getInappropriateKeywords() {
+	return aiConfig.inappropriateKeywords;
+}
+
+function getSafetySettingsResponse() {
+	return aiConfig.safetySettingsResponse;
+}
+
+function isInappropriateContent(type: string): boolean {
+  return aiConfig.inappropriateKeywords.some(keyword => 
+    type.toLowerCase().includes(keyword)
+  );
+}
+
+function getCacheConfig(): CacheConfig {
+  return {
+    enabled: aiConfig.cache?.enabled ?? true,
+    poolSize: aiConfig.cache?.poolSize ?? 4,
+    cacheDir: aiConfig.cache?.cacheDir ?? "generated/cache",
+  };
+}
+
 // Add the functions to the config object
 const config = {
   ...aiConfig,
   buildPrompt,
   stringTemplateParser,
+	getSafetySettings,
+	getInappropriateKeywords,
+	getSafetySettingsResponse,
+	isInappropriateContent,
+  getCacheConfig,
 };
-
 export { config };
+

@@ -77,7 +77,12 @@ export class WorldObjectFactory {
       for (const style of visualStyles) {
         const styleId = `${baseId}_${style}`;
         const styleAsset = baseAsset.replace('.png', `_${style}.png`);
-        scene.load.image(styleId, styleAsset);
+        
+        if (this.worldObjectList.some(obj => 
+          obj.id === styleId || obj.asset === styleAsset
+        )) {
+          scene.load.image(styleId, styleAsset);
+        }
       }
     }
   }
@@ -174,9 +179,10 @@ Phaser.GameObjects.GameObjectFactory.register(
     x: number,
     y: number,
     base64ImageData: string,
-    prop: WorldProp
+    prop: WorldProp,
+    name_prefix: string = "user"
   ) {
-    var obj_name = 'user' + Phaser.Math.Between(0, 65536);
+    var obj_name = name_prefix + Phaser.Math.Between(0, 65536);
 
     console.log('%%%%%% props', prop);
     var obj = new WorldObject(this.scene, x, y, obj_name, prop);

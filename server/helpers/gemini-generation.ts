@@ -18,6 +18,7 @@ import { GenerateContentConfig, GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import { getGoogleCloudConfig } from "../config";
 import { config as aiConfig } from "./ai-config-helper";
+import { cacheManager } from "./cache-manager";
 
 const { projectId, location } = getGoogleCloudConfig();
 
@@ -42,6 +43,7 @@ interface GeminiResponse {
         };
       }>;
     };
+    finishReason: string;
   }>;
 }
 
@@ -59,25 +61,73 @@ const generationConfig: GenerationConfig = {
   topP: 0.95,
   seed: 0,
   responseModalities: ["TEXT", "IMAGE"],
-  safetySettings: [
-    {
-      category: "HARM_CATEGORY_HATE_SPEECH",
-      threshold: "OFF",
-    },
-    {
-      category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-      threshold: "OFF",
-    },
-    {
-      category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-      threshold: "OFF",
-    },
-    {
-      category: "HARM_CATEGORY_HARASSMENT",
-      threshold: "OFF",
-    },
-  ],
+  safetySettings: aiConfig.getSafetySettings(),
 };
+
+async function generateImageBuffer(
+  objectType: string,
+  visualStyle: string,
+  promptId: string = "gemini_generation"
+): Promise<string> {
+  try {
+    // Try to get from cache first
+    const cachedResult = await cacheManager.getCachedImage(
+      objectType,
+      visualStyle,
+      "gemini"
+    );
+    if (cachedResult.success && cachedResult.data) {
+      console.log(
+        `Retrieved cached image for ${objectType} in ${visualStyle} style`
+      );
+      return cachedResult.data as string;
+    }
+
+    // If not in cache, proceed with normal image generation
+    const model = aiConfig.models["generation_gemini"];
+    if (!model) {
+      throw new Error("Gemini model configuration not found");
+    }
+
+    const textPrompt = aiConfig.buildPrompt(promptId, {
+      type: objectType,
+      visualStyle: visualStyle,
+    });
+
+    const vertexChat = ai.chats.create({
+      model: model,
+      config: generationConfig as GenerateContentConfig,
+    });
+
+    const response = await sendGeminiMessage(
+      vertexChat,
+      textPrompt,
+      "" // Empty input image for generation
+    );
+
+    if (!response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+      throw new Error("Invalid response format from Gemini API");
+    }
+
+    const base64Image = response.candidates[0].content.parts[0].inlineData.data;
+
+    // Cache the generated image
+    const cacheResult = await cacheManager.cacheImage(
+      objectType,
+      visualStyle,
+      base64Image,
+      "gemini"
+    );
+    if (!cacheResult.success) {
+      console.warn("Failed to cache image:", cacheResult.error);
+    }
+
+    return base64Image;
+  } catch (error) {
+    console.error("Error in generateImageBuffer:", error);
+    throw error;
+  }
+}
 
 // [START image_generation]
 export async function generateImageWithGemini(
@@ -88,16 +138,30 @@ export async function generateImageWithGemini(
   filepath: string
 ): Promise<string> {
   try {
-    // "generation_gemini": "gemini-2.0-flash-exp",
+    // Check cache first
+    const cachedResult = await cacheManager.getCachedImage(
+      objectType,
+      visualStyle,
+      "gemini"
+    );
+    if (
+      cachedResult.success &&
+      cachedResult.data &&
+      typeof cachedResult.data === "string"
+    ) {
+      console.log(
+        `Using cached image for ${objectType} in ${visualStyle} style`
+      );
+      fs.writeFileSync(filepath, Buffer.from(cachedResult.data, "base64"));
+      return filepath;
+    }
+
+    // If no cache hit, proceed with generation
     const model = aiConfig.models["generation_gemini"];
     if (!model) {
       throw new Error("Gemini model configuration not found");
     }
 
-    // "gemini_generation": "Generate an image of a {{type}},
-    // centered on a coloured background in a similar 2D
-    // side-on view with the following visual style:
-    // {{visualStyle}}.",
     const textPrompt = aiConfig.buildPrompt(promptId, {
       type: objectType,
       visualStyle: visualStyle,
@@ -109,7 +173,6 @@ export async function generateImageWithGemini(
     });
 
     if (inputImageData.startsWith("data:image/png;base64,")) {
-      // Remove the data:image/png;base64, prefix if present
       inputImageData = inputImageData.slice(22);
     }
 
@@ -119,24 +182,38 @@ export async function generateImageWithGemini(
       inputImageData
     );
 
+    // // Check for inappropriate content in the response
+    console.log("response from gemini", response);
+    console.log("response safety", response.candidates?.[0]);
+
+    if (response?.candidates?.[0]?.finishReason === "SAFETY") {
+      return "__BLOCKED__";
+    }
+
     if (!response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
       throw new Error("Invalid response format from Gemini API");
     }
 
+    const generatedImageData =
+      response.candidates[0].content.parts[0].inlineData.data;
+
     // ...
     // [END image_generation]
 
-    console.log("result", response);
-
-    fs.writeFileSync(
-      filepath,
-      response.candidates[0].content.parts[0].inlineData.data,
-      "base64"
-    );
+    // Save to file
+    fs.writeFileSync(filepath, generatedImageData, "base64");
 
     if (!fs.existsSync(filepath)) {
       throw new Error("Failed to save generated image");
     }
+
+    // Cache the generated image
+    await cacheManager.cacheImage(
+      objectType,
+      visualStyle,
+      generatedImageData,
+      "gemini"
+    );
 
     console.log(`Saved image ${filepath}`);
     return filepath;
@@ -176,3 +253,6 @@ async function sendGeminiMessage(
     throw error;
   }
 }
+
+// Export the base64 generation function for direct access
+export { generateImageBuffer };

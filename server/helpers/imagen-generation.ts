@@ -19,6 +19,7 @@ import { config as aiConfig } from "./ai-config-helper";
 import * as aiplatform from "@google-cloud/aiplatform";
 import util from "util";
 import fs from "fs";
+import { cacheManager } from "./cache-manager";
 
 const { projectId, location } = getGoogleCloudConfig();
 const { helpers } = aiplatform;
@@ -41,6 +42,24 @@ async function generateImageBuffer(
   promptId: string = "imagen_generation"
 ): Promise<string> {
   try {
+    // Try to get from cache first
+    const cachedResult = await cacheManager.getCachedImage(
+      objectType,
+      visualStyle,
+      "imagen"
+    );
+    if (cachedResult.success && cachedResult.data) {
+      console.log(
+        `Retrieved cached image for ${objectType} in ${visualStyle} style`
+      );
+      return cachedResult.data as string;
+    }
+
+    console.log(
+      `No cached image found, generating new image for ${objectType} in ${visualStyle} style`
+    );
+
+    // If not in cache, proceed with normal image generation
     const imagenModel = aiConfig.models["generation_imagen"];
     if (!imagenModel) {
       throw new Error("Imagen model configuration not found");
@@ -57,7 +76,7 @@ async function generateImageBuffer(
     const parameter = {
       sampleCount: 1,
       aspectRatio: "1:1",
-      safetySetting: "block_only_high",
+      safetySetting: aiConfig.getSafetySettings(),
     };
     const parameters = helpers.toValue(parameter);
 
@@ -89,6 +108,17 @@ async function generateImageBuffer(
       throw new Error("Generated image is empty");
     }
 
+    // Cache the generated image for future use
+    const cacheResult = await cacheManager.cacheImage(
+      objectType,
+      visualStyle,
+      base64Image,
+      "imagen"
+    );
+    if (!cacheResult.success) {
+      console.warn("Failed to cache image:", cacheResult.error);
+    }
+
     return base64Image;
 
     // ...
@@ -97,9 +127,9 @@ async function generateImageBuffer(
     if (error.code === 429) {
       throw new Error("Rate limit exceeded. Please try again later.");
     } else if (error.code === 400) {
-      throw new Error("Invalid request parameters");
+      throw new Error("Invalid request parameters.");
     }
-    throw new Error(`Failed to generate image: ${error.message}`);
+    throw error;
   }
 }
 
