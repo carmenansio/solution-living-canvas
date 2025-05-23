@@ -1,7 +1,7 @@
 {
   "models": {
-    "analysis_gemini": "gemini-2.0-flash-exp",
-    "generation_gemini": "gemini-2.0-flash-exp",
+    "analysis_gemini": "gemini-2.0-flash",
+    "generation_gemini": "gemini-2.0-flash-preview-image-generation",
     "generation_imagen": "imagen-3.0-fast-generate-001",
     "veo_generation": "veo-2.0-generate-001"
   },
